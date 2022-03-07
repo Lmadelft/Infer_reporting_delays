@@ -2,16 +2,17 @@ clear
 clc
 
 %new confirmed data for Spain
-spain_infected0=xlsread('i_cnov.xlsx');
-spain_recovered0=xlsread('r_cnov.xlsx');
-spain_death0=xlsread('d_cnov.xlsx');
+spain_infected0=xlsread('i_cnov.xlsx'); %number of daily infected cases 
+spain_recovered0=xlsread('r_cnov.xlsx'); %number of daily recovered cases
+spain_death0=xlsread('d_cnov.xlsx');     %number of daily deceased cases
 
 %smooth curve
 spain_infected0=smoothdata(spain_infected0);
 spain_recovered0=smoothdata(spain_recovered0);
 spain_death0=smoothdata(spain_death0);
 
-%add 60 days zeros before recorded data;
+%add 60 days zeros before recorded data
+%(since the cases may offer before the first day that the cases reported)
 initialv=zeros(1,60);
 spain_infected0=[initialv spain_infected0];
 spain_recovered0=[initialv spain_recovered0];
@@ -20,11 +21,15 @@ spain_death0=[initialv spain_death0];
 L1=length(spain_recovered0)-1;
 x = 0:L1;
 
-saverandomnb=zeros(10^7,10);
+saverandomnb=zeros(10^7,10); %save the data
 
 h=0;
 for numi=1:10^7
     numi
+    %generate candidate parameters   
+    %There are three delay distributions (infection, recovery and death)
+    %There are two parameters in each distribution.  Thus there are in
+    %total 6 parameters
     p_D=rand();
     p_I=rand();
     p_R=rand();
@@ -35,6 +40,7 @@ for numi=1:10^7
     r_I=mI*(p_I);
     r_R=mR*(p_R);
     
+    %save the 6 parameters of delay distributions
     saverandomnb(numi,1)=p_D;
     saverandomnb(numi,2)=p_I;
     saverandomnb(numi,3)=p_R;
@@ -42,11 +48,11 @@ for numi=1:10^7
     saverandomnb(numi,5)=r_I;
     saverandomnb(numi,6)=r_R;
                         
-    P_D=polyapdf(x,r_D,p_D);
-    P_I=polyapdf(x,r_I,p_I);
-    P_R=polyapdf(x,r_R,p_R);
+    P_D=polyapdf(x,r_D,p_D); %Pólya–Aeppli distribution
+    P_I=polyapdf(x,r_I,p_I); %Pólya–Aeppli distribution
+    P_R=polyapdf(x,r_R,p_R); %Pólya–Aeppli distribution
 
-    %Death
+    %Death (delay distribution)
     vectorDrep=spain_death0';
     matrixD=zeros(L1+1,L1+1);
 
@@ -57,11 +63,11 @@ for numi=1:10^7
                matrixD(km,km-eta)=P_D(1,kn);
             end
         end
-    end
-
+    end 
+    %obtain the data with no delay
     vectorDreal=matrixD\vectorDrep;
 
-    %infections
+    %infections (delay distribution)
     vectorIrep=spain_infected0';
     matrixI=zeros(L1+1,L1+1);
 
@@ -73,10 +79,10 @@ for numi=1:10^7
             end
         end
     end
-
+    %obtain the data with no delay
     vectorIreal=matrixI\vectorIrep;
 
-    %recovery
+    %recovery (delay distribution)
     vectorRrep=spain_recovered0';
     matrixR=zeros(L1+1,L1+1);
 
@@ -88,7 +94,7 @@ for numi=1:10^7
             end
         end
     end
-
+    %obtain the data with no delay
     vectorRreal=matrixR\vectorRrep;
 
     wuhan_infected=vectorIreal';
@@ -105,11 +111,12 @@ for numi=1:10^7
         acwuhandea(1,ki)=sum(wuhan_death(1:ki));
     end
 
-    Iwuhan = acwuhaninf - acwuhanrec - acwuhandea;
+    Iwuhan = acwuhaninf - acwuhanrec - acwuhandea;%get the cumulative fractions
 
     if length(find(wuhan_recovered<0))>15||length(find(wuhan_death<0))>15||length(find(Iwuhan<0))>15||length(find(wuhan_infected<0))>15
         saverandomnb(numi,:)=nan;
     else
+        %calculate the correlation coefficients
         % recovery-death
         [R1,P1] = corrcoef(wuhan_death,wuhan_recovered);
         % infection-recovery
@@ -126,10 +133,8 @@ end
 save saverandomnb saverandomnb
 
 saverandomnb(saverandomnb<=0)=nan;
-[maxval,maxidx]=max(saverandomnb(:,7))
-A=saverandomnb(maxidx,:)
-mean1=A(4)/A(1)
-mean2=A(6)/A(3)
-mean2-mean1
-A(5)/A(2)-mean2
-a=[A(5),A(2),A(6),A(3),A(4),A(1)]
+%find the delay parameters that corresponds with the largest correlation coefficients
+[maxval,maxidx]=max(saverandomnb(:,7));
+A=saverandomnb(maxidx,:);
+%inferred delay parameters
+a=[A(1),A(2),A(3),A(4),A(5),A(6)]
